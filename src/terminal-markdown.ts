@@ -2,6 +2,9 @@ import { Markdown, type MarkdownTheme } from "@earendil-works/pi-tui";
 
 const DEFAULT_COLUMNS = 80;
 
+// Any SGR (color/style) escape sequence.
+const ANSI_SGR = /\x1b\[[0-9;]*m/g;
+
 interface AnswerStream {
   isTTY?: boolean;
   columns?: number;
@@ -19,7 +22,12 @@ export function formatReviewAnswerOutput(
   const width = Math.max(1, columns - 1);
   const markdown = new Markdown(answer, 0, 0, markdownTheme(env));
 
-  return `${markdown.render(width).map((line) => line.trimEnd()).join("\n")}\n`;
+  // pi-tui's table renderer injects a hardcoded SGR reset on wrapped cells even under NO_COLOR
+  // (upstream earendil-works/pi#8825), so strip every escape ourselves when styling is off.
+  const plain = "NO_COLOR" in env;
+  const clean = (line: string): string => (plain ? line.replace(ANSI_SGR, "") : line);
+
+  return `${markdown.render(width).map((line) => clean(line).trimEnd()).join("\n")}\n`;
 }
 
 function markdownTheme(env: NodeJS.ProcessEnv): MarkdownTheme {
