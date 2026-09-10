@@ -29,6 +29,7 @@ PROJECT-AND-NAMING-BRIEF.md
 .env.test.local
 .env.production.local
 .env.local
+.envrc
 
 # caches
 .eslintcache
