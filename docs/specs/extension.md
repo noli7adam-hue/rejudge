@@ -6,14 +6,20 @@ The `rejudge` Pi extension tool: registration, invocation, results, and live pro
 
 The `rejudge` package loads `dist/extension.js` through the `pi.extensions` manifest. The bundle inlines third-party dependencies while the Pi SDK and typebox remain host-provided. Build it together with the CLI through `just build`; `bun install` rebuilds both artifacts through `prepare`. It registers one explicit tool, `rejudge`, displayed as **Rejudge for Pi**, with:
 
-- `question` (required) — the question or instruction for the reviewers.
+- `question` (required for reviews, omitted for history) — the question or instruction for the reviewers.
+- `history` (optional) — when true, list saved runs without model calls, configuration, or progress updates; omit question, title, outputInstructions, and resumeRunId.
+- `conversationId` (optional) — the calling agent's conversation ID, supplied whenever available for lookup and new reviews; resume retains original ownership.
 - `outputInstructions` (optional) — the desired output format (e.g. a requested structure, or P0/P1/P2/P3 buckets).
 - `title` (optional) — a short phrase for what the run is about, shown in the live progress header (see below).
 - `resumeRunId` (optional) — the id from an earlier successful run; when set, the tool resumes that run instead of starting a fresh panel.
 
-Without `resumeRunId`, Rejudge starts a fresh panel and the judge returns one answer plus a run ID. With `resumeRunId`, it restores the prior reviewer and judge sessions and sends the follow-up to the judge without repeating the fan-out. Intermediate reviewer outputs remain internal. Output instructions travel in the shared reviewer prompt and are reflected by the judge.
+For a review without `resumeRunId`, Rejudge starts a fresh panel and the judge returns one answer plus a run ID. With `resumeRunId`, it restores the prior reviewer and judge sessions and sends the follow-up to the judge without repeating the fan-out. Intermediate reviewer outputs remain internal. Output instructions travel in the shared reviewer prompt and are reflected by the judge.
 
-A missing or invalid config is a tool error. Pressing Esc returns the model-visible result `Rejudge cancelled by user.`; it is not reported as a broken review. A panel or judge failure still returns a non-fabricated result naming the stage, model, and reason. Reviewers are read-only by default; the judge has only `ask_panel`. See `tools.md`.
+Before creating a new review, agents call with `history: true`. A known run ID for this conversation's relevant review can be resumed directly. Follow-up code changes continue that review; independent questions start a new run. Continuing a run from another conversation is strongly discouraged because it can mix unrelated context.
+
+History returns JSON with up to five saved runs, ordered by last successful request, with total counts and bounded question previews. Missing conversation ID and no conversation matches produce distinct explanations and a fallback to this directory's recent runs. Lookup never automatically resumes a run. See [judge.md](judge.md) for the complete history result and retention rules.
+
+For reviews, a missing or invalid config is a tool error; history remains available. Pressing Esc returns the model-visible result `Rejudge cancelled by user.`; it is not reported as a broken review. A panel or judge failure still returns a non-fabricated result naming the stage, model, and reason. Reviewers are read-only by default; the judge has only `ask_panel`. See `tools.md`.
 
 ## Trust boundary
 

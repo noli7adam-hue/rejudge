@@ -10,10 +10,28 @@ One invocation = one review result: separate reviewers investigate the question 
 
 ## Pick the path by where you're running — THIS FIRST
 
-- **Inside Pi** — if the `rejudge` tool is available, **call that tool** with the question and any output instructions. Do not run the CLI: it would repeat the whole panel in a separate process. Skip straight to "Output to the user".
+- **Inside Pi** — if the `rejudge` tool is available, **use that tool** for history, new reviews, and follow-ups. Do not run the CLI: it would repeat the whole panel in a separate process. Apply "Find or continue a review" below before calling it.
 - **Anywhere else** (Claude Code or any harness without the `rejudge` tool) — run the CLI as described below.
 
 If `rejudge` appears in the available tools, use it. Fall back to the CLI only when the tool genuinely is not exposed.
+
+## Find or continue a review
+
+Pass your calling conversation's ID whenever available: `conversationId` in the tool or `--conversation-id <id>` in the CLI. This is the host conversation ID, not a Rejudge run ID. In Pi shell tools it is available as `PI_SESSION_ID`; in other hosts use their supplied session ID. Do not invent an ID when the host does not expose one. Missing IDs are accepted.
+
+If you already know the run ID of the relevant review in this conversation, continue directly with `resumeRunId` or `--resume <id>`. No history lookup is needed.
+
+Before creating a new run, check history, including when conversation compaction may have removed a previous run ID:
+
+- Tool: `{ "history": true, "conversationId": "<host-conversation-id>" }`, without a question or other review inputs.
+- CLI: `rejudge --history --conversation-id <host-conversation-id>`.
+- If the conversation ID is unavailable, omit that argument. If it is absent or has no matches, the result explains why and shows up to five recent runs from the current directory, not sibling worktrees.
+
+Choose by meaning, without asking the user to select a run: follow-up changes to code under review continue that review; independent questions, including separate research, start a new run. A failed resume is not permission to silently start from scratch.
+
+**Strongly discouraged: continuing a run from another conversation.** It can mix an independent request with unrelated context. Inspect the returned conversation IDs, dates, titles, and question previews; the fallback list helps discover work, not automatically reuse the latest run. Missing ownership does not mean a run belongs to this conversation.
+
+History lookup makes no model calls and needs no model configuration. Results show at most five runs ordered by the last successful request, with the total match count. Questions longer than 2000 characters are marked as truncated; their full text stays in the saved run manifest.
 
 ## The CLI
 
@@ -43,10 +61,12 @@ Run it in the foreground and wait. No tmux, detached sessions, polling, or backg
 The CLI reads the prompt from stdin — no temp file. Use a **quoted** heredoc (`<<'EOF'`) so nothing is escaped or interpolated. Never pass the prompt via `$(...)`, an unquoted heredoc, or an inline argument. Run it from the project root you want reviewed (the cwd drives BOTH config lookup and the panel agents' tools):
 
     # read-only by default — do NOT add --unsafe or --full (those enable write/bash)
-    rejudge > /tmp/rejudge-<id>.md <<'EOF'
+    rejudge --conversation-id <host-conversation-id> > /tmp/rejudge-<id>.md <<'EOF'
     ... full prompt body, multi-line, no escaping ...
     EOF
     echo "exit=$?"
+
+For a follow-up, add `--resume <run-id>` to the command. Omit `--conversation-id` only when the host ID is unavailable; resume retains the run's original conversation ID.
 
 - stdin (the heredoc) = the prompt; `> /tmp/rejudge-<id>.md` captures the result.
 - stdout (`/tmp/rejudge-<id>.md`) = the review result.

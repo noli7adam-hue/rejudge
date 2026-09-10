@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { runReview } from "../src/review.ts";
 import type { RejudgeConfig } from "../src/config.ts";
-import { newRunId, readManifest, runDir, writeManifest } from "../src/run-store.ts";
+import { listRunHistory, newRunId, readManifest, runDir, writeManifest } from "../src/run-store.ts";
 import type { ProgressEvent } from "../src/events.ts";
 import { integrationTest } from "./integration.ts";
 
@@ -76,31 +76,47 @@ test("resuming a run whose session files are gone fails with a resume error", as
 // can't recall it.
 integrationTest("a follow-up resumes a prior run and answers with its context", async () => {
   const verificationMarker = "X9Q7-KELP-418";
+  const cwd = mkdtempSync(join(tmpdir(), "rejudge-history-resume-"));
+  const conversationId = `conversation-${cwd}`;
 
   const first = await runReview(GOOD, `Repeat this token exactly: ${verificationMarker}`, {
-    cwd: process.cwd(),
+    cwd, conversationId, title: "Remember token",
   });
   expect(first.isOk()).toBe(true);
-  if (!first.isOk()) return;
+  if (!first.isOk()) {
+    rmSync(cwd, { recursive: true, force: true });
+    return;
+  }
   const runId = first.value.runId;
 
   try {
+    const before = readManifest(runId)!;
+    expect(before.conversationId).toBe(conversationId);
+    expect(listRunHistory(cwd, conversationId).runs[0].runId).toBe(runId);
     // Follow-up in a fresh runReview call: it must recall the token from restored context.
     const followUp = await runReview(GOOD, "What was the token? Reply with just the token.", {
-      cwd: process.cwd(),
+      cwd, conversationId: "another-conversation", title: "Do not replace original title",
       resumeRunId: runId,
     });
     expect(followUp.isOk()).toBe(true);
     if (followUp.isOk()) {
       expect(followUp.value.answer).toContain(verificationMarker);
       expect(followUp.value.runId).toBe(runId);
+      const after = readManifest(runId)!;
+      expect(after.conversationId).toBe(conversationId);
+      expect(after.title).toBe("Remember token");
+      expect(after.originalQuestion).toBe(before.originalQuestion);
+      expect(Date.parse(after.lastRequestAt!)).toBeGreaterThan(Date.parse(before.lastRequestAt!));
+      expect(listRunHistory(cwd, conversationId).runs[0].lastRequestAt).toBe(after.lastRequestAt);
+
+      const cancelled = await runReview(GOOD, "cancelled follow-up", { cwd, resumeRunId: runId, signal: AbortSignal.abort() });
+      expect(cancelled.isErr()).toBe(true);
+      expect(readManifest(runId)?.lastRequestAt).toBe(after.lastRequestAt);
     }
 
     // Control: the SAME question as a fresh run (no resume) can't know the token — proving the
     // follow-up's recall came from restored context, not the model guessing.
-    const control = await runReview(GOOD, "What was the token? Reply with just the token.", {
-      cwd: process.cwd(),
-    });
+    const control = await runReview(GOOD, "What was the token? Reply with just the token.", { cwd });
     expect(control.isOk()).toBe(true);
     if (control.isOk()) {
       expect(control.value.answer).not.toContain(verificationMarker);
@@ -108,6 +124,7 @@ integrationTest("a follow-up resumes a prior run and answers with its context", 
     }
   } finally {
     rmSync(runDir(runId), { recursive: true, force: true });
+    rmSync(cwd, { recursive: true, force: true });
   }
 }, 300_000);
 

@@ -17,7 +17,7 @@ import { resolveRejudgeConfig } from "./config.ts";
 import { progressTitle } from "./progress.ts";
 import { configureHttpDispatcher } from "./http-dispatcher.ts";
 import { formatFailure, runReview } from "./review.ts";
-import { readManifest } from "./run-store.ts";
+import { listRunHistory, readManifest } from "./run-store.ts";
 import { resolveReviewerToolNames } from "./runner.ts";
 import { createStderrSink } from "./stderr-sink.ts";
 import { createTtyProgress, shouldDrawLiveBlock } from "./tty-progress.ts";
@@ -59,6 +59,11 @@ async function main(): Promise<number> {
   if (args.kind === "error") {
     console.error(`rejudge: ${args.message}\n\n${USAGE}`);
     return 1;
+  }
+
+  if (args.kind === "history") {
+    console.log(JSON.stringify(listRunHistory(process.cwd(), args.conversationId), null, 2));
+    return 0;
   }
 
   // Resolve the prompt text from a file, stdin, or a positional instruction with optional
@@ -169,11 +174,12 @@ async function main(): Promise<number> {
 
   // Live progress goes to stderr; the review answer owns stdout. A missing resume fails before
   // painting rather than showing a guessed policy.
+  const title = progressTitle(prompt);
   const progress = toolPolicy
     ? createTtyProgress({
         reviewerModels: config.reviewers.map((model) => model.id),
         judgeModel: config.judge.id,
-        title: progressTitle(prompt),
+        title,
         mode,
         toolPolicy,
       })
@@ -187,6 +193,9 @@ async function main(): Promise<number> {
       cwd,
       fullTools: args.fullTools,
       resumeRunId: args.resume,
+      conversationId: args.conversationId,
+      title,
+      originalQuestion: prompt,
       promptAdds,
       reviewerTools: toolPolicy?.tools,
       activitySink: progress ? progress.sink : liveBlock ? undefined : createStderrSink(),

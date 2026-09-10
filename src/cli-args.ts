@@ -16,8 +16,23 @@ export const USAGE = `usage: rejudge ["your question"] | rejudge -f <file>
       --resume ID  follow up on a prior run: resume its reviewer and judge sessions
                    with their earlier context (the prompt is the follow-up).
                    Run directories become eligible for best-effort cleanup after
-                   ~24h when a later fresh run starts; cleanup is not guaranteed.
+                   ~24h after the last successful request when a later fresh run
+                   starts; cleanup is not guaranteed.
+      --history    list saved runs as JSON without models, config, or stdin input
+      --conversation-id ID
+                   caller's conversation ID for history lookup and new runs;
+                   resume keeps the saved run's original conversation
   -h, --help       show this help
+
+Agents: pass your conversation ID whenever available. Before creating a new run,
+check --history (with --conversation-id when available), including after compaction.
+A known ID for the relevant review in this conversation can be resumed directly.
+Follow-up code changes continue that review; independent questions start a new run.
+Strongly discouraged: resuming another conversation's run mixes unrelated context.
+Missing ID or no matches falls back to the latest five runs in this directory only.
+Both scopes show at most five runs, ordered by last successful request, with bounded
+question previews and total counts. Empty history succeeds. --history ignores stdin
+and cannot be combined with a prompt, file, resume, or reviewer options.
 
 Config: <cwd>/.rejudge/config.json, else ~/.config/rejudge/config.json.
 Key:    set OPENCODE_API_KEY in the environment (or use Pi's stored auth).`;
@@ -25,9 +40,10 @@ Key:    set OPENCODE_API_KEY in the environment (or use Pi's stored auth).`;
 /** Parsed CLI intent. `fullTools`/`resume`/`promptAdds` ride on the prompt/file/stdin kinds (orthogonal to the source). */
 export type CliArgs =
   | { kind: "help" }
-  | { kind: "prompt"; text: string; fullTools: boolean; resume?: string; promptAdds?: (string | undefined)[] }
-  | { kind: "file"; path: string; fullTools: boolean; resume?: string; promptAdds?: (string | undefined)[] }
-  | { kind: "stdin"; fullTools: boolean; resume?: string; promptAdds?: (string | undefined)[] }
+  | { kind: "history"; conversationId?: string }
+  | { kind: "prompt"; text: string; fullTools: boolean; resume?: string; promptAdds?: (string | undefined)[]; conversationId?: string }
+  | { kind: "file"; path: string; fullTools: boolean; resume?: string; promptAdds?: (string | undefined)[]; conversationId?: string }
+  | { kind: "stdin"; fullTools: boolean; resume?: string; promptAdds?: (string | undefined)[]; conversationId?: string }
   | { kind: "error"; message: string };
 
 export function combinePromptInput(instruction: string, input: string): string {
@@ -101,7 +117,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
   if ("error" in extracted) return { kind: "error", message: extracted.error };
   const { rest, promptAdds } = extracted;
 
-  let values: { file?: string; help?: boolean; unsafe?: boolean; full?: boolean; resume?: string };
+  let values: { file?: string; help?: boolean; unsafe?: boolean; full?: boolean; resume?: string; history?: boolean; "conversation-id"?: string };
   let positionals: string[];
   try {
     ({ values, positionals } = parseArgs({
@@ -112,6 +128,8 @@ export function parseCliArgs(argv: string[]): CliArgs {
         unsafe: { type: "boolean" },
         full: { type: "boolean" },
         resume: { type: "string" },
+        history: { type: "boolean" },
+        "conversation-id": { type: "string" },
       },
       allowPositionals: true,
     }));
@@ -120,6 +138,14 @@ export function parseCliArgs(argv: string[]): CliArgs {
   }
 
   if (values.help) return { kind: "help" };
+
+  const conversationId = values["conversation-id"]?.trim() || undefined;
+  if (values.history) {
+    if (positionals.length || values.file !== undefined || values.resume !== undefined || values.unsafe || values.full || promptAdds) {
+      return { kind: "error", message: "--history cannot be combined with a prompt, file, resume, or reviewer options" };
+    }
+    return { kind: "history", conversationId };
+  }
 
   // --unsafe and --full are synonyms: either one opts into the full (write) tool set.
   const fullTools = (values.unsafe ?? false) || (values.full ?? false);
@@ -140,11 +166,11 @@ export function parseCliArgs(argv: string[]): CliArgs {
   if (fileVal !== undefined) {
     const path = fileVal.trim();
     if (path === "") return { kind: "error", message: "-f needs a file path" };
-    return { kind: "file", path, fullTools, resume, promptAdds };
+    return { kind: "file", path, fullTools, resume, promptAdds, conversationId };
   }
 
   // No positional and no -f → the prompt comes from stdin. The actual read and the
   // "is this a bare interactive terminal?" guard live in cli.ts (this stays I/O-free).
-  if (question === "") return { kind: "stdin", fullTools, resume, promptAdds };
-  return { kind: "prompt", text: question, fullTools, resume, promptAdds };
+  if (question === "") return { kind: "stdin", fullTools, resume, promptAdds, conversationId };
+  return { kind: "prompt", text: question, fullTools, resume, promptAdds, conversationId };
 }

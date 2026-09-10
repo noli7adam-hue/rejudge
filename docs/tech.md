@@ -13,11 +13,12 @@ How it's built. Behavior → docs/specs/, product → docs/draft.md. Add tech de
 - Native `@earendil-works/pi-coding-agent` SDK (`createAgentSession`), in-process. Not `pi -p`, not third-party (pi-subagents, oh-my-pi).
 - Keep reviewer sessions alive through the judge step so `ask_panel` can re-query them.
 - Address agent slots internally by stable role key (`judge`, `panel-1`, `panel-2`, …). Provider/model IDs are configuration and display metadata, never routing keys. Persisted manifest version 4 stores these keys and rejects older ambiguous runs.
+- Run history reads optional metadata from the same manifests; malformed history fields are shown as missing rather than invalidating resume routing. CLI and Pi share the lookup result. A successful follow-up refreshes the manifest timestamp without changing the original conversation, question, or title.
 
 ## Runtime & layout
 - bun = dev only (deps + tests). No Bun APIs (`bun:*`, `Bun.*`) in code; runs on npm + plain Node.
 - Tests: Vitest.
-- Workflows: the root `justfile` is the human-facing repository interface. Recipes delegate to the scripts owned by the root and site packages; `setup` is the lifecycle exception that installs both dependency trees.
+- Workflows: the root `justfile` is the human-facing repository interface. Recipes delegate to the scripts owned by the root and site packages. `just test` and `just test-unit` build the CLI and extension first so built-interface checks always run; `setup` is the lifecycle exception that installs both dependency trees.
 - Package: one unscoped npm package, `rejudge`, containing the CLI, Pi extension, and both public workflows. Source lives in `src/`. `bin/rejudge.js` bundles the complete CLI runtime, so the global command runs without Pi installed. `pi.extensions` points at `dist/extension.js`, which bundles Rejudge code but leaves the Pi SDK, Pi TUI, and typebox external for the host. Pi registers the absolute global Rejudge package root instead of installing another copy. `just build` creates both artifacts; `prepare` rebuilds on `bun install`.
 - Landing page: the separate Astro project in `site/` owns its components, styles, dependencies, and Astro configuration. Shared components and localized content in `site/src/` produce English at `/` and Russian at `/ru/`. `just site-dev`, `just site-build`, and `just site-deploy` delegate to the site package; the build writes deployable static HTML to `site/dist/`.
 - Provider: `OPENCODE_GO` (not `opencode`).

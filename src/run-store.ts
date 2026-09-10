@@ -1,6 +1,6 @@
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { ThinkingLevel } from "@earendil-works/pi-ai";
 import { VALID_THINKING_LEVELS } from "./config.ts";
 import { JUDGE_ROLE_KEY, panelRoleKey, type RoleKey } from "./events.ts";
@@ -48,10 +48,86 @@ export interface RunManifest {
   /** Resolved cwd the run operated in — the resume guard (must match the resuming cwd). */
   cwd: string;
   createdAt: string;
+  conversationId?: string;
+  title?: string;
+  originalQuestion?: string;
+  lastRequestAt?: string;
   /** Whether the run used the full (write) tool set — re-applied on resume, never widened. */
   fullTools: boolean;
   reviewers: RunSessionRef[];
   judge: RunSessionRef;
+}
+
+export interface RunHistoryEntry {
+  runId: string;
+  conversationId: string | null;
+  title: string | null;
+  originalQuestion: string | null;
+  questionLength: number;
+  questionTruncated: boolean;
+  lastRequestAt: string | null;
+}
+
+export interface RunHistory {
+  reason: "conversation" | "conversation_id_missing" | "conversation_not_found";
+  cwd: string;
+  conversationId: string | null;
+  message: string;
+  warning?: string;
+  total: number;
+  runs: RunHistoryEntry[];
+}
+
+/** Read saved runs without loading model config, starting sessions, or changing ownership. */
+export function listRunHistory(cwd: string, conversationId?: string): RunHistory {
+  cwd = resolve(cwd);
+  const caller = conversationId?.trim() || null;
+  let names: string[] = [];
+  try {
+    names = readdirSync(runsRoot());
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  const entries: RunHistoryEntry[] = [];
+  for (const name of names) {
+    if (!RUN_ID_RE.test(name)) continue;
+    const manifest = readManifest(name);
+    if (!manifest || manifest.runId !== name || resolve(manifest.cwd) !== cwd) continue;
+    const files = [manifest.judge.file, ...manifest.reviewers.map((reviewer) => reviewer.file)];
+    if (files.some((file) => !file || !existsSync(file))) continue;
+
+    // Optional history fields never decide whether the original sessions can be resumed.
+    const question = historyText(manifest.originalQuestion);
+    entries.push({
+      runId: name,
+      conversationId: historyText(manifest.conversationId)?.trim() || null,
+      title: historyText(manifest.title)?.slice(0, 160) ?? null,
+      originalQuestion: question?.slice(0, 2000) ?? null,
+      questionLength: question?.length ?? 0,
+      questionTruncated: (question?.length ?? 0) > 2000,
+      lastRequestAt: historyDate(manifest.lastRequestAt) ?? historyDate(manifest.createdAt),
+    });
+  }
+  entries.sort((a, b) => (b.lastRequestAt ?? "").localeCompare(a.lastRequestAt ?? "") || b.runId.localeCompare(a.runId));
+
+  const matches = caller ? entries.filter((entry) => entry.conversationId === caller) : [];
+  const reason = !caller ? "conversation_id_missing" : matches.length ? "conversation" : "conversation_not_found";
+  const selected = reason === "conversation" ? matches : entries;
+  const introduction = reason === "conversation"
+    ? "Found runs for the current conversation."
+    : reason === "conversation_id_missing"
+      ? "No conversation ID was supplied. Showing recent runs from the current working directory."
+      : "No runs found for the current conversation. Showing recent runs from the current working directory.";
+  return {
+    reason, cwd, conversationId: caller,
+    message: `${introduction} Showing ${Math.min(5, selected.length)} of ${selected.length}, newest successful request first. Question previews are limited to 2000 characters; full questions remain in the saved manifests.`,
+    ...(reason === "conversation" ? {} : {
+      warning: "Strongly discouraged: continuing a run from another conversation can mix unrelated context. These records are for discovery, not automatic reuse. A missing conversation ID does not establish ownership.",
+    }),
+    total: selected.length,
+    runs: selected.slice(0, 5),
+  };
 }
 
 /** Root for all persisted runs, e.g. `/tmp/rejudge/runs`. */
@@ -153,4 +229,13 @@ export function gcExpired(now: number, ttlMs: number = RUN_TTL_MS): void {
       // A vanished dir or a permission hiccup must not break the run.
     }
   }
+}
+
+function historyText(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function historyDate(value: unknown): string | null {
+  if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) return null;
+  return new Date(value).toISOString();
 }

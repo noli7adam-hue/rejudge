@@ -10,6 +10,14 @@ A code review through Rejudge — this is `/rejudge` pointed at a diff. Read the
 
 For a generic multi-model question, use `rejudge`; for an implementation-plan review, use `plan-review`.
 
+## Find the existing review before starting another
+
+Follow the `rejudge` skill's history rules. Pass the host conversation ID whenever available (`conversationId` in the tool, `--conversation-id` in the CLI). A known run ID for this conversation's relevant review can be resumed directly. Otherwise check history before creating a new run; compaction may have removed its ID from your context.
+
+When checking fixes to the same review, continue with `resumeRunId` or `--resume` and ask for a fresh diff against the selected ref. An independent question or separate research needs a new run. Choose by meaning, not simply the newest timestamp.
+
+**Strongly discouraged: continuing a review from another conversation.** The fallback list of recent runs in this directory is for discovery; reusing another conversation's run can mix unrelated context. Inspect its conversation ID, date, title, and question before choosing.
+
 ## Pick the ref
 
 The panel always diffs the working tree against one ref. Choose `<REF>`:
@@ -48,8 +56,10 @@ The review prompt below is the same whichever way you launch. Pick the path:
     (ship / fix-first / discuss). Stay in scope. If there are no changes, say so.
     EOF
 
-    rejudge -f /tmp/rejudge-diff-<id>.txt > /tmp/rejudge-diff-<id>.md
+    rejudge --conversation-id <host-conversation-id> -f /tmp/rejudge-diff-<id>.txt > /tmp/rejudge-diff-<id>.md
     echo "exit=$?"
+
+For a follow-up, add `--resume <run-id>` to the command (or `resumeRunId` to the tool call). Omit the conversation ID argument only when the host ID is unavailable.
 
 - Fill `<PROBLEM>` / `<APPROACH>` / `<DECISIONS>` / `<CONSTRAINTS>` from the actual work — you did it, so you know the task, how you solved it, and every decision taken. Mark each decision **AGENT** or **USER**: the AGENT ones are the most suspect — the panel should pressure them; USER ones can still be flagged for discussion. Don't shield decisions as "given" — catching a bad one is the whole point. Constraints are the real boundaries the panel respects. Replace `<REF>` (default `HEAD`) and `<id>` (any short unique tag, e.g. `$$`, so parallel runs don't collide).
 - A **[USER]** decision MUST be a verbatim quote of the user's own words from THIS chat — original language, copy-pasted, no translation, no paraphrase, no inference. Put the quote in the decision line. If you cannot quote the user verbatim, it is NOT a USER decision — mark it **[AGENT]**. Never write a USER decision from memory or invent one. Same for `<CONSTRAINTS>`: a constraint attributed to the user needs a verbatim quote, otherwise it is your own and stays open to challenge.

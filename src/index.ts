@@ -18,11 +18,14 @@ import {
   type ProgressSnapshot,
 } from "./progress.ts";
 import { reviewMode } from "./review-mode.ts";
+import { listRunHistory } from "./run-store.ts";
 
 const parameters = Type.Object({
-  question: Type.String({
-    description: "The question or instruction for the reviewers and judge.",
-  }),
+  history: Type.Optional(Type.Boolean({ description: "List saved runs without model calls. Omit question, title, outputInstructions, and resumeRunId. Shows up to five entries, newest successful request first; question previews are limited to 2000 characters." })),
+  conversationId: Type.Optional(Type.String({ description: "Your calling conversation's ID, not a Rejudge run ID. Pass whenever available, for history and review calls. Missing/blank ID or no matches falls back to the latest five runs in this directory." })),
+  question: Type.Optional(Type.String({
+    description: "The question or instruction for the reviewers and judge. Required unless history is true.",
+  })),
   title: Type.Optional(
     Type.String({
       description:
@@ -85,14 +88,27 @@ export default function (pi: ExtensionAPI): void {
     name: "rejudge",
     label: "Rejudge for Pi",
     description:
-      "Use Rejudge to independently review an important plan, change, or conclusion before proceeding. For follow-up questions, pass resumeRunId from a prior result.",
+      "Use Rejudge to independently review an important plan, change, or conclusion. Pass your conversationId whenever available. Before creating a new run, call with history: true to find earlier work, including after compaction. If you know resumeRunId for the relevant review in this conversation, resume directly without lookup. Follow-up code changes continue that review; independent questions or research start a new run. Strongly discouraged: resuming runs from another conversation can mix unrelated context. History never selects or resumes a run automatically.",
     parameters,
     // The tool draws its own multi-line block; don't wrap it in the default tool shell.
     renderShell: "self",
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
-      // Gate: refuse to start on a missing/invalid project or user-global config.
+      const conversationId = params.conversationId?.trim() || undefined;
+      if (params.history) {
+        if (params.question !== undefined || params.title !== undefined || params.outputInstructions !== undefined || params.resumeRunId !== undefined) {
+          return { content: [{ type: "text", text: "rejudge failed: history cannot be combined with question, title, outputInstructions, or resumeRunId" }], details: undefined };
+        }
+        const history = listRunHistory(ctx.cwd, conversationId);
+        return { content: [{ type: "text", text: JSON.stringify(history, null, 2) }], details: undefined };
+      }
+      if (!params.question?.trim()) {
+        return { content: [{ type: "text", text: "rejudge failed: question is required unless history is true" }], details: undefined };
+      }
+
+      // History remains available even when model configuration is missing or invalid.
       const { config } = resolveRejudgeConfig(ctx.cwd);
       const prompt = buildInvocationPrompt(params.question, params.outputInstructions);
+      const title = progressTitle(params.question, params.title);
       const resumeRunId = params.resumeRunId?.trim();
       if (params.resumeRunId !== undefined && !resumeRunId) {
         return {
@@ -119,7 +135,7 @@ export default function (pi: ExtensionAPI): void {
       const state = createProgressState(
         config.reviewers.map((model) => model.id),
         config.judge.id,
-        progressTitle(params.question, params.title),
+        title,
         prompt,
         reviewMode(resumeRunId),
         { fullTools: false, tools: reviewerTools },
@@ -151,6 +167,9 @@ export default function (pi: ExtensionAPI): void {
           signal,
           activitySink: sink,
           resumeRunId,
+          conversationId,
+          title,
+          originalQuestion: params.question,
           reviewerTools,
         });
         // Don't throw on failure — throwing makes the host discard the whole rendered block.

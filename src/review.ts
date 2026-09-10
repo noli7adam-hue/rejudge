@@ -58,6 +58,9 @@ export interface ReviewOptions {
   promptAdds?: (string | undefined)[];
   /** Resume a prior run instead of starting fresh; `prompt` is the follow-up for its judge. */
   resumeRunId?: string;
+  conversationId?: string;
+  title?: string;
+  originalQuestion?: string;
 }
 
 function message(e: unknown): string {
@@ -177,6 +180,10 @@ async function freshRun(
       runId,
       cwd,
       createdAt: new Date().toISOString(),
+      lastRequestAt: new Date().toISOString(),
+      conversationId: options.conversationId?.trim() || undefined,
+      title: options.title,
+      originalQuestion: options.originalQuestion ?? prompt,
       fullTools: Boolean(options.fullTools),
       reviewers: config.reviewers.map((model, index) => ({
         roleKey: panel.value[index].roleKey,
@@ -301,6 +308,9 @@ async function resumeRun(
     if (judge.isErr()) {
       return err(judge.error);
     }
+    // Keep the original question and conversation: a follow-up must not relabel old context.
+    // The atomic manifest write also refreshes the directory mtime used for cleanup eligibility.
+    writeManifest({ ...manifest, lastRequestAt: new Date().toISOString() });
     return ok({ answer: judge.value, runId });
   } finally {
     for (const reviewer of panel) reviewer.session.dispose();

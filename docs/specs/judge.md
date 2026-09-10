@@ -25,7 +25,15 @@ Every run is persisted so a later invocation can resume the same reviewer and ju
 
 The follow-up goes to the run's restored judge — it already holds round 1 and can re-query the restored panels via `ask_panel`; the panel fan-out is not re-run. Resuming is opt-in at use: a run with no `--resume` always starts clean.
 
-Runs live under `${TMPDIR}/rejudge/runs/<runId>/`, outside the project and Pi's own `/resume` list, and are bound to the original working directory. Run directories become eligible for best-effort cleanup after about 24 hours, checked when a later fresh run starts; deletion is not guaranteed, and a resume does not extend that lifetime. Resume is best-effort through CLI `--resume <runId>` or the `rejudge` tool's `resumeRunId` parameter.
+Runs live under `${TMPDIR}/rejudge/runs/<runId>/`, outside the project and Pi's own `/resume` list, and are bound to the original working directory. Run directories become eligible for best-effort cleanup about 24 hours after their last successful request, checked when a later fresh run starts; deletion is not guaranteed. Resume is best-effort through CLI `--resume <runId>` or the `rejudge` tool's `resumeRunId` parameter.
+
+## Find a saved review after losing its run ID
+
+Pass the calling conversation's ID on new reviews: `conversationId` in the Pi tool or `--conversation-id <id>` in the CLI. To find saved reviews, call the tool with `history: true` or run `rejudge --history`, supplying the same conversation ID when available. Lookup reads local saved runs without models or model configuration.
+
+Lookup first finds runs for that conversation in the current directory. If the ID is absent or no runs match, it explains which happened and shows recent runs from the current directory only, excluding sibling worktrees. Each result includes the run ID, original conversation ID when known, title, original question preview, and last successful request time. Both scopes return up to five runs, newest first, with a total count. Question previews stop at 2000 characters and indicate truncation; full questions remain in the run manifests. Older runs may have missing metadata, shown as `null`; runs whose required session files are missing are excluded.
+
+Before creating a new run, agents check history. A known ID for the relevant review in the current conversation can be resumed directly. Follow-up code changes continue that review; independent questions start a new run. Continuing a run from another conversation is strongly discouraged because it can mix unrelated context. Lookup never chooses or resumes a run, and resuming never changes its original conversation ID, question, or title.
 
 # Tasks
 
@@ -166,7 +174,7 @@ Runs live under `${TMPDIR}/rejudge/runs/<runId>/`, outside the project and Pi's 
 
   DoD: the judge names all targeted models, and each targeted model shows its current repeat pass while processing the request.
 
-- [ ] SYN-087 Find previous Rejudge runs when their IDs are lost from conversation history
+- [x] SYN-087 Find previous Rejudge runs when their IDs are lost from conversation history
   Agents can recover an earlier review and ask follow-up questions instead of repeating the review from scratch.
 
   Add history lookup to the Rejudge tool and CLI. Save each run's working directory, run ID, title, original question, last-request date/time, and caller conversation ID when available. History lookup does not call models.
@@ -184,7 +192,14 @@ Runs live under `${TMPDIR}/rejudge/runs/<runId>/`, outside the project and Pi's 
 
   DoD:
   - Tool and CLI can find saved runs by conversation ID after history compression or a process restart, without calling models.
-  - Both fallback cases show at most five runs from the current directory, ordered by last request, with the required fields and the correct explanation.
+  - Both lookup scopes show at most five runs from the current directory, ordered by last request, with the required fields; fallback results explain whether the conversation ID was missing or had no matches.
   - History lookup never automatically continues a run.
   - Tool description, calling skills, CLI help, and fallback results contain the agreed rules.
   - Verification covers direct continuation with a known run ID, conversation lookup, both fallback cases, last-request ordering after continuation, and exclusion of sibling worktrees.
+
+  **Implemented:**
+  - Tool and CLI find saved reviews by caller conversation, with distinct explanations for missing-ID and no-match directory fallbacks.
+  - Results show recent successful activity, original conversation IDs, titles, and bounded question previews; sibling worktrees and runs with missing session files are excluded.
+  - Successful follow-ups refresh ordering and cleanup eligibility while retaining the original conversation, question, and title.
+  - Tool descriptions, both packaged skills, and CLI help require history checks before new reviews and strongly discourage cross-conversation reuse.
+  - Built CLI and Pi-loader checks agree on saved history; live tests verify recorded ownership, restored context, and successful-follow-up timestamps.

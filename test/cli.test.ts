@@ -6,6 +6,17 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { combinePromptInput, parseCliArgs } from "../src/cli-args.ts";
 
+test("history is a prompt-free intent and conversation IDs also accompany reviews", () => {
+  expect(parseCliArgs(["--history", "--conversation-id", " caller "])).toEqual({ kind: "history", conversationId: "caller" });
+  expect(parseCliArgs(["--history", "--conversation-id", "  "])).toEqual({ kind: "history" });
+  expect(parseCliArgs(["--conversation-id", "caller", "hello"])).toMatchObject({ kind: "prompt", conversationId: "caller" });
+  expect(parseCliArgs(["--conversation-id", "caller", "--resume", "id", "follow up"])).toMatchObject({ kind: "prompt", conversationId: "caller", resume: "id" });
+  expect(parseCliArgs(["--conversation-id"]).kind).toBe("error");
+  for (const args of [["hello"], ["-f", "p.txt"], ["--resume", "id"], ["--unsafe"], ["--full"], ["--prompt-add-1", "extra"]]) {
+    expect(parseCliArgs(["--history", ...args]).kind).toBe("error");
+  }
+});
+
 test("a single positional becomes the prompt (read-only by default)", () => {
   expect(parseCliArgs(["hello"])).toEqual({ kind: "prompt", text: "hello", fullTools: false });
 });

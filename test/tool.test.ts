@@ -8,7 +8,7 @@ import { buildInvocationPrompt } from "../src/index.ts";
 import { resolve, join } from "node:path";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { runDir } from "../src/run-store.ts";
+import { listRunHistory, readManifest, runDir } from "../src/run-store.ts";
 import type { ProgressSnapshot } from "../src/progress.ts";
 
 const STUB = "opencode-go/kimi-k2.6";
@@ -17,8 +17,8 @@ const packageManifest = JSON.parse(readFileSync(resolve("package.json"), "utf8")
 };
 const builtExtension = resolve(packageManifest.pi.extensions[0]);
 
-async function loadTool(cwd: string, agentDir: string) {
-  const loaded = await discoverAndLoadExtensions([resolve("src/index.ts")], cwd, agentDir);
+async function loadTool(cwd: string, agentDir: string, extension = resolve("src/index.ts")) {
+  const loaded = await discoverAndLoadExtensions([extension], cwd, agentDir);
   expect(loaded.errors).toEqual([]);
   return loaded.extensions
     .flatMap((extension) => [...extension.tools.values()])
@@ -67,6 +67,36 @@ test("rejudge exposes resumeRunId as an optional parameter", async () => {
   const schema = tool!.definition.parameters as { properties?: Record<string, unknown> };
   expect(schema.properties).toHaveProperty("resumeRunId");
   expect(JSON.stringify(schema.properties!.resumeRunId)).toContain("minLength");
+});
+
+test.each([resolve("src/index.ts"), builtExtension])("history works through Pi without model config or progress: %s", async (extension) => {
+  const cwd = mkdtempSync(join(tmpdir(), "rejudge-history-tool-"));
+  const agentDir = mkdtempSync(join(tmpdir(), "rejudge-agentdir-"));
+  // Invalid project config would fail any review call, even with a valid global config.
+  mkdirSync(join(cwd, ".rejudge"));
+  writeFileSync(join(cwd, ".rejudge", "config.json"), "invalid");
+  try {
+    const tool = await loadTool(cwd, agentDir, extension);
+    expect(tool).toBeDefined();
+    const updates: unknown[] = [];
+    const invoke = (params: Record<string, unknown>) => tool!.definition.execute(
+      "history-check", params, undefined, (update) => updates.push(update), { cwd } as ExtensionContext,
+    );
+    for (const conversationId of [undefined, "unknown"]) {
+      const result = await invoke({ history: true, conversationId });
+      const text = result.content.map((part) => part.type === "text" ? part.text : "").join("");
+      expect(JSON.parse(text)).toEqual(listRunHistory(cwd, conversationId));
+      expect(result.details).toBeUndefined();
+    }
+    for (const params of [{}, { history: true, question: "review" }, { history: true, title: "review" }, { history: true, resumeRunId: "id" }, { history: true, outputInstructions: "brief" }]) {
+      const result = await invoke(params);
+      expect(result.content).toEqual([{ type: "text", text: expect.stringContaining("rejudge failed:") }]);
+    }
+    expect(updates).toEqual([]);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(agentDir, { recursive: true, force: true });
+  }
 });
 
 test("buildInvocationPrompt composes the question with output instructions", () => {
@@ -194,6 +224,8 @@ integrationTest("rejudge runs end-to-end and returns a reviewed answer", async (
     "test-call",
     {
       question: "What is the capital of France?",
+      conversationId: `tool-${cwd}`,
+      title: "Capital question",
       outputInstructions: "Begin your reply with the token RESULT:",
     },
     undefined,
@@ -208,6 +240,13 @@ integrationTest("rejudge runs end-to-end and returns a reviewed answer", async (
   const runId = text.match(/Run ID: ([^\s.]+)/)?.[1];
   expect(runId).toBeDefined();
   if (runId) {
-    rmSync(runDir(runId), { recursive: true, force: true });
+    try {
+      expect(readManifest(runId)).toMatchObject({
+        conversationId: `tool-${cwd}`, title: "Capital question", originalQuestion: "What is the capital of France?",
+      });
+      expect(listRunHistory(cwd, `tool-${cwd}`).runs.map((run) => run.runId)).toEqual([runId]);
+    } finally {
+      rmSync(runDir(runId), { recursive: true, force: true });
+    }
   }
 }, 180_000);

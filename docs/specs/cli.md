@@ -31,6 +31,12 @@ Reviews are read-only by default. Reviewers get `read`/`grep`/`find`/`ls` plus r
 
 Config resolves from `<cwd>/.rejudge/config.json`, then `~/.config/rejudge/config.json` (XDG-aware). See `config.md`. Provider credentials stay in environment variables such as `OPENCODE_API_KEY` or Pi's stored authentication; the CLI does not store them.
 
+## Find previous reviews
+
+Pass `--conversation-id <id>` on reviews when the calling agent's conversation ID is available. Run `rejudge --history --conversation-id <id>` before creating a new review; if the relevant run ID is already known, use `--resume <run-id>` directly. Follow-up code changes continue their review; independent questions start a new run. Continuing another conversation's run is strongly discouraged because it mixes unrelated context.
+
+`--history` returns JSON on stdout without models or configuration, even when the configuration is invalid. It ignores stdin and rejects a positional prompt, `--file`, `--resume`, and reviewer options. Empty history returns an empty `runs` array and exit 0. Without a conversation ID, or when no matching runs exist, the result explains why and returns up to five recent runs from this directory only. Both lookup scopes are ordered by the last successful request and show a total count and bounded question previews. See [judge.md](judge.md) for saved-run fields and retention.
+
 ## Verification
 
 Tests cover package installation, executable resolution, ordinary and diff reviews, missing credentials, CLI input forms, and resumed runs.

@@ -16,6 +16,8 @@ When the host exposes the native `rejudge` tool, the skills use it. Otherwise, t
 
 Both routes resolve the same project or global configuration and create the same saved runs. A skill continues a run with the same run ID: `resumeRunId` through the Pi tool or `--resume` through the CLI. Configuration rules live in [config.md](config.md); each interface defines its resume argument in its own contract.
 
+Agents pass their host conversation ID whenever available and check saved-run history before starting a new review. A known ID for the relevant review in the current conversation can be resumed directly. Follow-up code changes continue that review; independent questions start a new run. Continuing another conversation's run is strongly discouraged because it mixes unrelated context. A directory fallback helps discover previous work, not automatically choose the latest run. Both skills carry these rules, including recovery after conversation compaction.
+
 ## Updates
 
 When Pi is registered to the npm-installed package directory, that package supplies the review engine, Pi extension, and Pi-discovered skills, so npm updates them together. Skills copied into other agents are separate copies and are not updated by npm. After a Rejudge release, update global Agent Skills with `npx skills update -g -y`.

@@ -8,11 +8,11 @@ setup:
     cd site && bun install
 
 # Run the full test suite, including live tests when credentials are available.
-test:
+test: build
     bun run test
 
 # Run deterministic tests without model calls.
-test-unit:
+test-unit: build
     bun run test:unit
 
 # Check TypeScript types.
