@@ -165,3 +165,26 @@ Runs live under `${TMPDIR}/rejudge/runs/<runId>/`, outside the project and Pi's 
   - supersede `SYN-064` where it hides repeated requests
 
   DoD: the judge names all targeted models, and each targeted model shows its current repeat pass while processing the request.
+
+- [ ] SYN-087 Find previous Rejudge runs when their IDs are lost from conversation history
+  Agents can recover an earlier review and ask follow-up questions instead of repeating the review from scratch.
+
+  Add history lookup to the Rejudge tool and CLI. Save each run's working directory, run ID, title, original question, last-request date/time, and caller conversation ID when available. History lookup does not call models.
+
+  User decisions:
+  - Agents pass their conversation ID whenever available. Tool and CLI also accept calls without it.
+  - Before creating a new run, the agent checks history. If it already knows the relevant review's run ID in the current conversation, it can continue directly by passing that ID as resumeRunId.
+  - The agent chooses by the request's meaning: follow-up changes to code under review continue that review; an independent question, such as a separate research request, starts a new run.
+  - Search the current conversation first. If its ID is missing or no runs match, show the latest five runs from the current working directory, excluding sibling worktrees.
+  - Order runs by their last request, newest first, so a recently continued review stays near the top.
+  - Explain which fallback occurred: no conversation ID was supplied, or no runs were found for the current conversation.
+  - Each result shows the last-request date/time, title, original question, run ID, and conversation ID when available.
+  - Strongly discourage continuing runs from another conversation: this can mix an independent request with unrelated context. The fallback list helps discover previous work, not automatically select a run to continue.
+  - State these rules in the tool description, skills that call Rejudge, and CLI help. Repeat the cross-conversation warning in fallback results.
+
+  DoD:
+  - Tool and CLI can find saved runs by conversation ID after history compression or a process restart, without calling models.
+  - Both fallback cases show at most five runs from the current directory, ordered by last request, with the required fields and the correct explanation.
+  - History lookup never automatically continues a run.
+  - Tool description, calling skills, CLI help, and fallback results contain the agreed rules.
+  - Verification covers direct continuation with a known run ID, conversation lookup, both fallback cases, last-request ordering after continuation, and exclusion of sibling worktrees.
