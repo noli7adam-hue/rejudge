@@ -86,7 +86,23 @@ test.each([resolve("src/index.ts"), builtExtension])("history works through Pi w
       const result = await invoke({ history: true, conversationId });
       const text = result.content.map((part) => part.type === "text" ? part.text : "").join("");
       expect(JSON.parse(text)).toEqual(listRunHistory(cwd, conversationId));
-      expect(result.details).toBeUndefined();
+      expect(result.details).toEqual({ history: JSON.parse(text) });
+      const render = tool!.definition.renderResult!;
+      const collapsed = render(result, { expanded: false, isPartial: false }, undefined!, undefined!).render(100).join("\n");
+      expect(collapsed.trimEnd()).toBe("Found 0 runs");
+
+      const history = { ...JSON.parse(text), total: 1, runs: [{
+        runId: "saved-review-id", title: "Review history rendering", lastRequestAt: "2026-09-10T10:00:00.000Z",
+        originalQuestion: "PRIVATE LONG QUESTION", conversationId: "caller-id",
+      }] };
+      const populated = { content: [{ type: "text" as const, text: JSON.stringify(history) }], details: { history } };
+      const expanded = render(populated, { expanded: true, isPartial: false }, undefined!, undefined!).render(100).join("\n");
+      expect(expanded).toContain("Review history rendering");
+      expect(expanded).toContain("Last request: 2026-09-10T10:00:00.000Z");
+      expect(expanded).toContain("Run ID: saved-review-id");
+      expect(expanded).not.toContain("PRIVATE LONG QUESTION");
+      expect(expanded).not.toContain('"runs"');
+      expect(JSON.parse(populated.content[0].text).runs[0].originalQuestion).toBe("PRIVATE LONG QUESTION");
     }
     for (const params of [{}, { history: true, question: "review" }, { history: true, title: "review" }, { history: true, resumeRunId: "id" }, { history: true, outputInstructions: "brief" }]) {
       const result = await invoke(params);

@@ -18,7 +18,9 @@ import {
   type ProgressSnapshot,
 } from "./progress.ts";
 import { reviewMode } from "./review-mode.ts";
-import { listRunHistory } from "./run-store.ts";
+import { listRunHistory, type RunHistory } from "./run-store.ts";
+
+type ToolDetails = ProgressSnapshot | { history: RunHistory } | undefined;
 
 const parameters = Type.Object({
   history: Type.Optional(Type.Boolean({ description: "List saved runs without model calls. Omit question, title, outputInstructions, and resumeRunId. Shows up to five entries, newest successful request first; question previews are limited to 2000 characters." })),
@@ -66,7 +68,7 @@ export function buildInvocationPrompt(question: string, outputInstructions?: str
 }
 
 /** Join a tool result's text content into one string. */
-function textContent(result: AgentToolResult<ProgressSnapshot | undefined>): string {
+function textContent(result: AgentToolResult<ToolDetails>): string {
   return result.content
     .filter((c): c is Extract<typeof c, { type: "text" }> => c.type === "text")
     .map((c) => c.text)
@@ -84,7 +86,7 @@ function textContent(result: AgentToolResult<ProgressSnapshot | undefined>): str
  * the reviewers and judge (see {@link buildInvocationPrompt}).
  */
 export default function (pi: ExtensionAPI): void {
-  pi.registerTool<typeof parameters, ProgressSnapshot | undefined>({
+  pi.registerTool<typeof parameters, ToolDetails>({
     name: "rejudge",
     label: "Rejudge for Pi",
     description:
@@ -99,7 +101,7 @@ export default function (pi: ExtensionAPI): void {
           return { content: [{ type: "text", text: "rejudge failed: history cannot be combined with question, title, outputInstructions, or resumeRunId" }], details: undefined };
         }
         const history = listRunHistory(ctx.cwd, conversationId);
-        return { content: [{ type: "text", text: JSON.stringify(history, null, 2) }], details: undefined };
+        return { content: [{ type: "text", text: JSON.stringify(history, null, 2) }], details: { history } };
       }
       if (!params.question?.trim()) {
         return { content: [{ type: "text", text: "rejudge failed: question is required unless history is true" }], details: undefined };
@@ -194,6 +196,24 @@ export default function (pi: ExtensionAPI): void {
     },
     renderResult(result, options: ToolRenderResultOptions, theme: Theme) {
       const s = result.details;
+      if (s && "history" in s) {
+        const history = s.history;
+        const count = history.runs.length;
+        const summary = history.total > count ? `Found ${history.total} runs (showing ${count})` : `Found ${count} runs`;
+        if (!options.expanded) return new Text(summary, 0, 0);
+
+        const lines = [summary];
+        if (history.reason === "conversation_id_missing") {
+          lines.push("No conversation ID supplied; recent runs in this directory.");
+        }
+        if (history.reason === "conversation_not_found") {
+          lines.push("No runs for this conversation; recent runs in this directory.");
+        }
+        for (const run of history.runs) {
+          lines.push("", run.title ?? "Untitled review", `Last request: ${run.lastRequestAt ?? "unknown"}`, `Run ID: ${run.runId}`);
+        }
+        return new Text(lines.join("\n"), 0, 0);
+      }
       const text = textContent(result);
       // No snapshot (shouldn't happen mid-run) → just show whatever text there is.
       if (!s || !Array.isArray(s.models)) return new Text(text);
