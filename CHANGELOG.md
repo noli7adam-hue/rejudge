@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1 — 2026-09-10
+
+- Show a compact run count for history lookups in Pi. Expanded results show titles, dates, and run IDs instead of JSON and long questions; agents still receive the structured history.
+
 ## 0.4.0 — 2026-09-10
 
 - Find saved reviews through the Pi tool's `history` option or CLI `--history`, without calling models.
