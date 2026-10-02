@@ -1,12 +1,12 @@
 ---
 name: rejudge
-description: Run Rejudge — send a question to separate reviewers and a judge, returning one reviewed result (the rejudge tool inside Pi, else the rejudge CLI; read-only). Use when the user says /rejudge or wants a multi-model review. For one external reviewer, use ask-subagent instead.
+description: Run Rejudge — send a question to separate reviewers and a judge, returning one reviewed result (the rejudge tool inside Pi, else the rejudge CLI; read-only). Use when the user says /rejudge or wants a multi-model review. For one external reviewer, use ask-agent-cli instead.
 user_invocable: true
 ---
 
 # Rejudge
 
-One invocation = one review result: separate reviewers investigate the question and a judge returns one answer. Want two runs? Invoke the skill twice. For one external opinion from one model, use `ask-subagent` instead.
+One invocation = one review result: separate reviewers investigate the question and a judge returns one answer. Want two runs? Invoke the skill twice. For one external opinion from one model, use `ask-agent-cli` instead.
 
 ## Pick the path by where you're running — THIS FIRST
 
