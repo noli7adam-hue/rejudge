@@ -7,6 +7,11 @@ setup:
     bun install
     cd site && bun install
 
+# Install local checkout globally using bun and register in Pi.
+install-local: build
+    bun link
+    pi install "$PWD"
+
 # Run the full test suite, including live tests when credentials are available.
 test: build
     bun run test
