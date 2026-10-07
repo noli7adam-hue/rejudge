@@ -70,3 +70,17 @@ Use at least two `reviewers` and one `judge`. Every model is a full `provider/mo
   - Resume (SYN-029) carries the level per session in the manifest (`RunSessionRef.level`), manifest bumped to version 2; a pre-CFG-030 manifest now reads as expired (runs are ephemeral, so no migration). The CLI prints `id@level`.
   - `.pi/fusion-agents.json`, the README config example, and the user-global config were migrated to the `@level` form.
   - Verified on real models: `@level` config file loads and runs (panel + synth at different levels), and a resume round-trip restores each session's level; deterministic config tests cover the required-suffix, invalid-level, empty-id, malformed-id, and leftover-`thinking` errors.
+
+- [ ] CFG-088 Find `.rejudge/config.json` in parent folders
+  Projects in a shared workspace share one `.rejudge/config.json`.
+
+  Rejudge searches for `.rejudge/config.json` starting in the current folder and checking parent folders up to the filesystem root. The nearest `.rejudge/config.json` wins. When no parent folder contains `.rejudge/config.json`, Rejudge falls back to `~/.config/rejudge/config.json`. If neither config exists, Rejudge exits with an error saying where it looked. Previously, Rejudge checked only the current folder before falling back to `~/.config/rejudge/config.json`.
+
+  Both the standalone CLI and the tool inside the Pi terminal coding agent find `.rejudge/config.json` the same way. Finding `.rejudge/config.json` in a parent folder does not change the working directory: reviewer models still run their file tools in the current folder. When falling back to `~/.config/rejudge/config.json`, `.rejudge/logs` stays in `<cwd>/.rejudge/logs`.
+
+  User decision: with `debugLog` enabled, Rejudge writes `.rejudge/logs` next to the found `.rejudge/config.json`.
+
+  DoD:
+  - running Rejudge from a subfolder resolves the nearest `.rejudge/config.json` in parent folders over any higher `.rejudge/config.json` and over `~/.config/rejudge/config.json`
+  - with `debugLog` enabled, Rejudge writes `.rejudge/logs` next to the resolved `.rejudge/config.json`, or to `<cwd>/.rejudge/logs` when falling back to `~/.config/rejudge/config.json`
+  - the missing-config error says where Rejudge looked
