@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { ThinkingLevel } from "@earendil-works/pi-ai";
 
 /** The reasoning levels Pi accepts (lowercase only; "off" is not one of them). */
@@ -38,8 +38,8 @@ export function configPath(cwd: string): string {
 }
 
 /**
- * Path to the user-global config, used as a fallback when the project has no
- * `.rejudge/config.json`. Honors `XDG_CONFIG_HOME`, else `~/.config`.
+ * Path to the user-global config, used as a fallback when no folder from the current one up to the
+ * filesystem root has a `.rejudge/config.json`. Honors `XDG_CONFIG_HOME`, else `~/.config`.
  */
 export function globalConfigPath(): string {
   const base = process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), ".config");
@@ -50,18 +50,36 @@ export function globalConfigPath(): string {
 export interface ResolvedConfig {
   config: RejudgeConfig;
   path: string;
+  /** The folder that holds `.rejudge/logs`: next to a project config, else the current folder. */
+  logRoot: string;
 }
 
 /**
- * Resolve config: prefer the project's `<cwd>/.rejudge/config.json`, else fall back to the
- * user-global {@link globalConfigPath}. Throws a clear error naming both paths when neither exists.
+ * Resolve config: the nearest `.rejudge/config.json` from `cwd` up through its parent folders,
+ * else the user-global {@link globalConfigPath}. The nearest file wins even when it is invalid.
+ * Throws a clear error naming every place it looked when nothing exists.
  */
 export function resolveRejudgeConfig(cwd: string): ResolvedConfig {
-  const local = configPath(cwd);
-  if (existsSync(local)) return { config: loadRejudgeConfigFromPath(local), path: local };
+  const start = resolve(cwd);
+  const projectRoot = findProjectRoot(start);
+  if (projectRoot) {
+    const path = configPath(projectRoot);
+    return { config: loadRejudgeConfigFromPath(path), path, logRoot: projectRoot };
+  }
+
   const global = globalConfigPath();
-  if (existsSync(global)) return { config: loadRejudgeConfigFromPath(global), path: global };
-  throw new Error(`no config found: looked in ${local} and ${global}`);
+  if (existsSync(global)) return { config: loadRejudgeConfigFromPath(global), path: global, logRoot: start };
+  throw new Error(
+    `no config found: looked for ${configPath(start)} and in every parent folder up to the filesystem root, then ${global}`,
+  );
+}
+
+/** The nearest folder, from `start` up to the filesystem root, that contains `.rejudge/config.json`. */
+function findProjectRoot(start: string): string | undefined {
+  for (let dir = start; ; dir = dirname(dir)) {
+    if (existsSync(configPath(dir))) return dir;
+    if (dirname(dir) === dir) return undefined;
+  }
 }
 
 /**

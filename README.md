@@ -75,7 +75,7 @@ Create `~/.config/rejudge/config.json` once.
 
 Two reviewers minimum. Every model needs a reasoning level, and a higher level means a longer and more thorough review: `minimal`, `low`, `medium`, `high`, `xhigh`.
 
-A `.rejudge/config.json` in the current project wins over the global file, and `$XDG_CONFIG_HOME/rejudge/config.json` works in place of `~/.config`.
+Rejudge looks for `.rejudge/config.json` in the current folder and then in each parent folder up to the filesystem root. The nearest one wins over the global file, and `$XDG_CONFIG_HOME/rejudge/config.json` works in place of `~/.config`.
 
 ### 5. Ask
 
@@ -118,7 +118,7 @@ Every run ends with a run ID. `rejudge --resume <run-id> "..."` reopens the same
 
 **Sessions are written to disk while a run executes.** They land in `${TMPDIR}/rejudge/runs/<run-id>/` and hold the request, the model messages, and the tool calls and results. Failed and cancelled runs leave their files behind, and only a successful run with a manifest can be resumed. A directory becomes eligible for cleanup after roughly 24 hours, and only a later fresh review triggers that check, so deletion is best-effort. Your operating system's temp cleanup is a separate matter.
 
-**`debugLog` is off by default.** Turn it on and Rejudge writes `.rejudge/logs/*.jsonl` with full model thinking and assistant text plus truncated tool arguments and results. Keep both locations out of version control and delete records on whatever schedule you already use.
+**`debugLog` is off by default.** Turn it on and Rejudge writes `.rejudge/logs/*.jsonl` next to the project config (in the current folder when the global config is used) with full model thinking and assistant text plus truncated tool arguments and results. Keep both locations out of version control and delete records on whatever schedule you already use.
 
 **A finished run is not a correct run.** Success means the reviewers and the judge completed, nothing more. The reviews start in separate sessions, but their errors can still line up. Rejudge does not promise correctness, does not treat agreement as truth, and has no measured advantage over one strong model. Verify anything consequential.
 
@@ -151,7 +151,7 @@ pi install "$PWD"
 
 - **Unsupported Node version** — the crash is a `TypeError` from inside the bundle (`webidl.util.markAsUncloneable is not a function`), not a version message. Install Node 22.19.0 or newer, and under a version manager check `node --version` in the shell that starts `rejudge`, since `#!/usr/bin/env node` resolves whichever Node is active rather than the one you installed under.
 - **`rejudge: command not found`** — check that `npm install -g rejudge` succeeded and that the `bin` directory under `npm prefix -g` is on your `PATH`.
-- **`rejudge: no config found`** — create `.rejudge/config.json` in the project, or the global file shown above.
+- **`rejudge: no config found`** — create `.rejudge/config.json` in the project or any parent folder, or the global file shown above.
 - **Authentication failure** — export the provider key in the same shell that starts `rejudge` or Pi. The last stderr line names the stage that failed and usually contains `API key`, `authentication`, `credentials`, or `unauthorized`.
 - **Pi does not show Rejudge** — run `pi list`, check that the registered path matches `$(npm root -g)/rejudge`, then restart Pi.
 - **A model or a stage fails** — read the final stderr reason, then check the model ID, provider access, rate limits, and network.

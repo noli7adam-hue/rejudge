@@ -32,6 +32,7 @@ function withGlobalConfig(content: string | null, fn: () => void): void {
 }
 
 const PROJECT_CFG = JSON.stringify({ reviewers: ["a/1@high", "b/2@high", "c/3@high"], judge: "d/4@medium" });
+const OUTER_CFG = JSON.stringify({ reviewers: ["o/1@high", "o/2@high"], judge: "o/3@high" });
 const GLOBAL_CFG = JSON.stringify({ reviewers: ["g/1@high", "g/2@high", "g/3@high"], judge: "g/4@medium" });
 
 test("valid config parses each model's id and @level, defaulting debugLog", () => {
@@ -159,9 +160,70 @@ test("resolveRejudgeConfig: old project path is not a compatibility alias", () =
   });
 });
 
-test("resolveRejudgeConfig: throws naming both paths when neither exists", () => {
+test("resolveRejudgeConfig: throws when neither a project nor a global config exists", () => {
   const cwd = projectWith(null);
   withGlobalConfig(null, () => {
     expect(() => resolveRejudgeConfig(cwd)).toThrow(/no config found/);
+  });
+});
+
+// Parent-folder lookup (CFG-088): the nearest .rejudge/config.json up the tree wins.
+function nestedFolder(root: string, ...parts: string[]): string {
+  const dir = join(root, ...parts);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+test("resolveRejudgeConfig: finds the config in a parent folder from a nested subfolder", () => {
+  const root = projectWith(PROJECT_CFG);
+  const sub = nestedFolder(root, "packages", "app");
+  withGlobalConfig(GLOBAL_CFG, () => {
+    const result = resolveRejudgeConfig(sub);
+    expect(result.path).toBe(join(root, ".rejudge", "config.json"));
+    expect(result.config.judge.id).toBe("d/4");
+    expect(result.logRoot).toBe(root);
+  });
+});
+
+test("resolveRejudgeConfig: the nearest config wins over a higher one", () => {
+  const root = projectWith(OUTER_CFG);
+  const middle = nestedFolder(root, "workspace");
+  mkdirSync(join(middle, ".rejudge"), { recursive: true });
+  writeFileSync(join(middle, ".rejudge", "config.json"), PROJECT_CFG);
+  const sub = nestedFolder(middle, "app", "src");
+  withGlobalConfig(GLOBAL_CFG, () => {
+    const result = resolveRejudgeConfig(sub);
+    expect(result.path).toBe(join(middle, ".rejudge", "config.json"));
+    expect(result.config.judge.id).toBe("d/4");
+    expect(result.logRoot).toBe(middle);
+  });
+});
+
+test("resolveRejudgeConfig: a global fallback keeps logs in the current folder", () => {
+  const sub = nestedFolder(projectWith(null), "app");
+  withGlobalConfig(GLOBAL_CFG, () => {
+    const result = resolveRejudgeConfig(sub);
+    expect(result.path).toBe(join(process.env.XDG_CONFIG_HOME as string, "rejudge", "config.json"));
+    expect(result.logRoot).toBe(sub);
+  });
+});
+
+test("resolveRejudgeConfig: an invalid nearest config is an error, not a skip to a higher one", () => {
+  const root = projectWith(PROJECT_CFG);
+  const sub = nestedFolder(root, "app");
+  mkdirSync(join(sub, ".rejudge"), { recursive: true });
+  writeFileSync(join(sub, ".rejudge", "config.json"), "{ not json");
+  withGlobalConfig(GLOBAL_CFG, () => {
+    expect(() => resolveRejudgeConfig(sub)).toThrow(/not valid JSON/);
+  });
+});
+
+test("resolveRejudgeConfig: the missing-config error says where Rejudge looked", () => {
+  const sub = nestedFolder(projectWith(null), "app");
+  withGlobalConfig(null, () => {
+    const globalPath = join(process.env.XDG_CONFIG_HOME as string, "rejudge", "config.json");
+    expect(() => resolveRejudgeConfig(sub)).toThrow(sub);
+    expect(() => resolveRejudgeConfig(sub)).toThrow(/every parent folder/);
+    expect(() => resolveRejudgeConfig(sub)).toThrow(globalPath);
   });
 });

@@ -29,7 +29,7 @@ The review answer goes to stdout. In a terminal it is rendered as width-aware Ma
 
 Reviews are read-only by default. Reviewers get `read`/`grep`/`find`/`ls` plus read-only review tools; the judge gets only `ask_panel`. `--unsafe` and `--full` opt reviewers into editing and shell access.
 
-Config resolves from `<cwd>/.rejudge/config.json`, then `~/.config/rejudge/config.json` (XDG-aware). See `config.md`. Provider credentials stay in environment variables such as `OPENCODE_API_KEY` or Pi's stored authentication; the CLI does not store them.
+Config resolves from the nearest `.rejudge/config.json` from `<cwd>` up through its parent folders, then `~/.config/rejudge/config.json` (XDG-aware). See `config.md`. Provider credentials stay in environment variables such as `OPENCODE_API_KEY` or Pi's stored authentication; the CLI does not store them.
 
 ## Find previous reviews
 

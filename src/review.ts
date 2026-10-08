@@ -51,6 +51,8 @@ export type ReviewResult = Result<ReviewSuccess, ReviewFailure>;
 /** Options for {@link runReview}, including the persisted-run resume handle. */
 export interface ReviewOptions {
   cwd?: string;
+  /** Folder whose `.rejudge/logs` receives the debug log (the config's folder). Defaults to `cwd`. */
+  logRoot?: string;
   signal?: AbortSignal;
   activitySink?: ActivitySink;
   fullTools?: boolean;
@@ -133,7 +135,7 @@ async function freshRun(
 
   // One per-run debug log shared by every agent (when config.debugLog is on). Best-effort —
   // createDebugLog never throws; its notices ride the sink as diagnostics, not raw stderr.
-  const debugLog = config.debugLog ? createDebugLog(cwd, sink) : undefined;
+  const debugLog = config.debugLog ? createDebugLog(options.logRoot ?? cwd, sink) : undefined;
 
   // Reap runs past the TTL before adding one, then persist this run to its own temp dir. The SDK
   // writes each session's JSONL into `dir`; we read each file path back for the manifest.
@@ -236,7 +238,7 @@ async function resumeRun(
     return err(resumeFailure(runId, "session files missing (expired or partially cleaned)"));
   }
 
-  const debugLog = config.debugLog ? createDebugLog(cwd, sink) : undefined;
+  const debugLog = config.debugLog ? createDebugLog(options.logRoot ?? cwd, sink) : undefined;
 
   // Reopen reviewer sessions — live but unprompted — so ask_panel can re-query them. Restore the
   // same tool policy the run used; resume never widens it.

@@ -108,7 +108,7 @@ export default function (pi: ExtensionAPI): void {
       }
 
       // History remains available even when model configuration is missing or invalid.
-      const { config } = resolveRejudgeConfig(ctx.cwd);
+      const { config, logRoot } = resolveRejudgeConfig(ctx.cwd);
       const prompt = buildInvocationPrompt(params.question, params.outputInstructions);
       const title = progressTitle(params.question, params.title);
       const resumeRunId = params.resumeRunId?.trim();
@@ -166,6 +166,7 @@ export default function (pi: ExtensionAPI): void {
         // calling agent can't get edit/write/bash behind the user's back.
         const result = await runReview(config, prompt, {
           cwd: ctx.cwd,
+          logRoot,
           signal,
           activitySink: sink,
           resumeRunId,

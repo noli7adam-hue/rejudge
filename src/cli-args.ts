@@ -34,7 +34,7 @@ Both scopes show at most five runs, ordered by last successful request, with bou
 question previews and total counts. Empty history succeeds. --history ignores stdin
 and cannot be combined with a prompt, file, resume, or reviewer options.
 
-Config: <cwd>/.rejudge/config.json, else ~/.config/rejudge/config.json.
+Config: nearest .rejudge/config.json from <cwd> up through parent folders, else ~/.config/rejudge/config.json.
 Key:    set OPENCODE_API_KEY in the environment (or use Pi's stored auth).`;
 
 /** Parsed CLI intent. `fullTools`/`resume`/`promptAdds` ride on the prompt/file/stdin kinds (orthogonal to the source). */

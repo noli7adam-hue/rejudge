@@ -5,7 +5,7 @@
 //   rejudge "your question here"
 //   rejudge -f prompt.txt
 //
-// Config: reads <cwd>/.rejudge/config.json, else ~/.config/rejudge/config.json.
+// Config: reads the nearest .rejudge/config.json from <cwd> up through parent folders, else ~/.config/rejudge/config.json.
 // Key: Pi reads OPENCODE_API_KEY from the environment (or its stored auth) on its own —
 // the CLI never touches the key. Packaged builds resolve runtime dependencies from the
 // package installation.
@@ -110,12 +110,13 @@ async function main(): Promise<number> {
     }
   }
 
-  // Resolve config: project's .pi/, else ~/.config/. A missing/invalid config is a setup
-  // error the user must fix; like every failure it exits non-zero with the reason printed.
+  // Resolve config: the nearest .rejudge/config.json up the folder tree, else ~/.config/. A
+  // missing/invalid config is a setup error the user must fix; like every failure it exits
+  // non-zero with the reason printed.
   const cwd = process.cwd();
-  let config, path;
+  let config, path, logRoot;
   try {
-    ({ config, path } = resolveRejudgeConfig(cwd));
+    ({ config, path, logRoot } = resolveRejudgeConfig(cwd));
   } catch (err) {
     console.error(`rejudge: ${msg(err)}\n\n${USAGE}`);
     return 1;
@@ -191,6 +192,7 @@ async function main(): Promise<number> {
   try {
     result = await runReview(config, prompt, {
       cwd,
+      logRoot,
       fullTools: args.fullTools,
       resumeRunId: args.resume,
       conversationId: args.conversationId,

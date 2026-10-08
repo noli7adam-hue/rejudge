@@ -2,7 +2,7 @@
 
 ## `.rejudge/config.json`
 
-Rejudge reads project configuration from `<project>/.rejudge/config.json`, then falls back to `~/.config/rejudge/config.json` (or `$XDG_CONFIG_HOME/rejudge/config.json`). The project file wins.
+Rejudge reads project configuration from the nearest `.rejudge/config.json`, checking the current folder and then each parent folder up to the filesystem root, then falls back to `~/.config/rejudge/config.json` (or `$XDG_CONFIG_HOME/rejudge/config.json`). The nearest project file wins, even when it is invalid. If no config exists, the error says where Rejudge looked. Reviewers keep working in the current folder.
 
 ```json
 {
@@ -18,7 +18,7 @@ Rejudge reads project configuration from `<project>/.rejudge/config.json`, then 
 
 Use at least two `reviewers` and one `judge`. Every model is a full `provider/model@level` string. Valid levels are `minimal`, `low`, `medium`, `high`, and `xhigh`; the suffix is required and may differ per model. Missing files, malformed JSON, fewer than two reviewers, a missing judge, invalid model IDs or levels, legacy `panel` / `synth` keys, and the removed `thinking` block all fail clearly.
 
-`debugLog` is optional, defaults to `false`, and must be a boolean. When enabled, each review writes JSONL activity to `.rejudge/logs/<timestamp>.jsonl`; see `panel.md`.
+`debugLog` is optional, defaults to `false`, and must be a boolean. When enabled, each review writes JSONL activity to `.rejudge/logs/<timestamp>.jsonl` next to the project config (in `<cwd>` when the global config is used); see `panel.md`.
 
 # Tasks
 
@@ -71,7 +71,7 @@ Use at least two `reviewers` and one `judge`. Every model is a full `provider/mo
   - `.pi/fusion-agents.json`, the README config example, and the user-global config were migrated to the `@level` form.
   - Verified on real models: `@level` config file loads and runs (panel + synth at different levels), and a resume round-trip restores each session's level; deterministic config tests cover the required-suffix, invalid-level, empty-id, malformed-id, and leftover-`thinking` errors.
 
-- [ ] CFG-088 Find `.rejudge/config.json` in parent folders
+- [x] CFG-088 Find `.rejudge/config.json` in parent folders
   Projects in a shared workspace share one `.rejudge/config.json`.
 
   Rejudge searches for `.rejudge/config.json` starting in the current folder and checking parent folders up to the filesystem root. The nearest `.rejudge/config.json` wins. When no parent folder contains `.rejudge/config.json`, Rejudge falls back to `~/.config/rejudge/config.json`. If neither config exists, Rejudge exits with an error saying where it looked. Previously, Rejudge checked only the current folder before falling back to `~/.config/rejudge/config.json`.
@@ -84,3 +84,9 @@ Use at least two `reviewers` and one `judge`. Every model is a full `provider/mo
   - running Rejudge from a subfolder resolves the nearest `.rejudge/config.json` in parent folders over any higher `.rejudge/config.json` and over `~/.config/rejudge/config.json`
   - with `debugLog` enabled, Rejudge writes `.rejudge/logs` next to the resolved `.rejudge/config.json`, or to `<cwd>/.rejudge/logs` when falling back to `~/.config/rejudge/config.json`
   - the missing-config error says where Rejudge looked
+
+  **Implemented:**
+  - Rejudge checks the current folder and then each parent folder up to the filesystem root for `.rejudge/config.json`; the nearest one wins, then `~/.config/rejudge/config.json`. The CLI and the Pi tool share this lookup.
+  - The missing-config error names the current-folder path, says it also checked every parent folder, and names the global path.
+  - Reviewers still run in the current folder; with `debugLog` on, logs go to `.rejudge/logs` next to the found project config, or to `<cwd>/.rejudge/logs` with the global fallback.
+  - Verified with the built CLI from a nested subfolder: `config:` named the ancestor config and the log landed in the ancestor's `.rejudge/logs`, with no `.rejudge` folder in the subfolder.

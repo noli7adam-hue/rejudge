@@ -58,7 +58,7 @@ The Pi `rejudge` tool renders the same events as a live in-place block; see `ext
 
 ## Debug log
 
-Set `"debugLog": true` in `.rejudge/config.json` to write one JSONL file under `.rejudge/logs/<timestamp>.jsonl`. Every reviewer and the judge append records to the same file:
+Set `"debugLog": true` in `.rejudge/config.json` to write one JSONL file under `.rejudge/logs/<timestamp>.jsonl` next to the project config, or in `<cwd>/.rejudge/logs/` when the global config is used. Every reviewer and the judge append records to the same file:
 
     {"t":1718620862123,"model":"deepseek-v4-pro","kind":"thinking","chars":4213,"lines":88,"content":"…"}
     {"t":1718620864501,"model":"deepseek-v4-pro","kind":"tool_result","tool":"bash","toolCallId":"…","isError":false,"chars":51200,"lines":900,"content":"…(truncated)…"}

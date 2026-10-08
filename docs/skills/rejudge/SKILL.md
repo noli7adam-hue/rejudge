@@ -43,7 +43,7 @@ In Codex, MUST run the Rejudge CLI with `exec_command` in a TTY and keep the sam
 
 ## Prerequisites
 
-- **Config**: Rejudge reads `<cwd>/.rejudge/config.json`, else `~/.config/rejudge/config.json` (or `$XDG_CONFIG_HOME/rejudge/config.json`). It contains `reviewers` and `judge` model IDs. A project config shadows the global config, so check the `config: <path>` line before trusting the result. With `debugLog: true`, logs go under `.rejudge/logs/`. On a non-zero exit, report the stderr reason; do not guess models.
+- **Config**: Rejudge reads the nearest `.rejudge/config.json` from `<cwd>` up through its parent folders, else `~/.config/rejudge/config.json` (or `$XDG_CONFIG_HOME/rejudge/config.json`). It contains `reviewers` and `judge` model IDs. A project config shadows the global config, so check the `config: <path>` line before trusting the result. With `debugLog: true`, logs go under `.rejudge/logs/` next to the found project config (in `<cwd>` when the global config is used). On a non-zero exit, report the stderr reason; do not guess models.
 - **Key**: `OPENCODE_API_KEY` exported in the environment, or Pi's stored auth (`pi login`). Never baked in. A missing key isn't instant — all agents fail a minute or two in, so confirm auth before a long run.
 
 ## Read-only by default
